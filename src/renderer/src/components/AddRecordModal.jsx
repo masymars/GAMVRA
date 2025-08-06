@@ -266,7 +266,7 @@ const AddRecordModal = ({
                         value={newRecord.title} 
                         onChange={(e) => setNewRecord({...newRecord, title: e.target.value})} 
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors bg-white text-gray-900" 
-                        placeholder="e.g., Annual Check-up Results 2024" 
+                        placeholder="e.g., Annual Check-up Results" 
                       />
                     </div>
                     <div>

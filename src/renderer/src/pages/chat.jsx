@@ -1,8 +1,8 @@
 import React from 'react';
-import { 
-  Upload, Mic, MicOff, FileScan, FileText, Send, Trash2, Download, 
+import {
+  Upload, Mic, MicOff, FileScan, FileText, Send, Trash2, Download,
   Settings, Stethoscope, BrainCircuit, FileAudio, BotMessageSquare,
-  HeartPulse, ArrowLeft, User, Database
+  HeartPulse, ArrowLeft, Database
 } from 'lucide-react';
 import { useGemma } from '../api/gemma';
 import { useConversationHandler } from '../api/conversationHandler';
@@ -10,7 +10,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import MemoryManagementModal from '../components/MemoryManagementModal';
 import { usePatientRecords } from '../components/PatientRecordsContext';
-
+import { MessageBubble } from '../components/MessageBubble'; // <-- Import the new component
 
 // Mock data for UI display purposes
 const MediGemmaModels = {
@@ -32,7 +32,7 @@ const debounce = (func, wait) => {
   return debounced;
 };
 
-// MultimodalInput component
+// MultimodalInput component (remains unchanged)
 const MultimodalInput = ({ onSubmit, isLoading, waitingForResponse, ensureConversationExists }) => {
   const [textInput, setTextInput] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -44,7 +44,6 @@ const MultimodalInput = ({ onSubmit, isLoading, waitingForResponse, ensureConver
 
   const isDisabled = isLoading || waitingForResponse;
 
-  // Better file cleanup function
   const cleanupFiles = useCallback(() => {
     filesCleanupRef.current.forEach(url => {
       URL.revokeObjectURL(url);
@@ -52,12 +51,10 @@ const MultimodalInput = ({ onSubmit, isLoading, waitingForResponse, ensureConver
     filesCleanupRef.current.clear();
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return cleanupFiles;
   }, [cleanupFiles]);
 
-  // Add file with cleanup tracking
   const addFileWithCleanup = useCallback((file) => {
     const url = URL.createObjectURL(file);
     filesCleanupRef.current.add(url);
@@ -76,7 +73,6 @@ const MultimodalInput = ({ onSubmit, isLoading, waitingForResponse, ensureConver
       ...prev,
       ...files.map(addFileWithCleanup)
     ]);
-    // Clear the file input to allow selecting the same file again or ensure fresh selections
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -119,23 +115,17 @@ const MultimodalInput = ({ onSubmit, isLoading, waitingForResponse, ensureConver
       return prev.filter(f => f.id !== id);
     });
   };
-  
+
   const removeAudio = () => {
     setAudioBlob(null);
   }
 
   const handleSubmit = () => {
     if (!textInput.trim() && uploadedFiles.length === 0 && !audioBlob) return;
-    
-    // Ensure a conversation exists before submitting
     ensureConversationExists();
-    
     const inputData = { text: textInput, files: uploadedFiles, audioRecording: audioBlob };
     onSubmit(inputData);
-    
-    // Clean up current files
     cleanupFiles();
-    
     setTextInput('');
     setUploadedFiles([]);
     setAudioBlob(null);
@@ -213,8 +203,8 @@ const MultimodalInput = ({ onSubmit, isLoading, waitingForResponse, ensureConver
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isDisabled}
             className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
-              isRecording 
-                ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+              isRecording
+                ? 'bg-red-100 text-red-700 hover:bg-red-200'
                 : 'bg-primary-100 text-primary-700 hover:bg-primary-200'
             }`}
           >
@@ -237,12 +227,9 @@ const MultimodalInput = ({ onSubmit, isLoading, waitingForResponse, ensureConver
 };
 
 
-
-// AICoreSelector component
+// AICoreSelector component (remains unchanged)
 const AICoreSelector = ({ models }) => {
-
-  const selectedCore = 'core-radiology-4b'; // Matched to the key in MediGemmaModels
-
+  const selectedCore = 'core-radiology-4b';
   return (
     <div className="bg-white border-b border-primary-200 p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -253,27 +240,26 @@ const AICoreSelector = ({ models }) => {
             {models[selectedCore].name}
           </span>
         </div>
-         
       </div>
-      
     </div>
   );
 };
 
+
 // Main Chat page component
 const ChatPage = () => {
   const location = useLocation();
-  const { 
-    modelStatus, 
-    initMessage, 
-    isModelReady, 
-    isLoading, 
-    messages, 
-    generateResponse, 
+  const {
+    modelStatus,
+    initMessage,
+    isModelReady,
+    isLoading,
+    messages,
+    generateResponse,
     clearConversation,
-    setMessages // We'll need this to load conversation messages
+    setMessages
   } = useGemma();
-  
+
   const {
     currentConversationId,
     createNewConversation,
@@ -282,7 +268,6 @@ const ChatPage = () => {
     setCurrentConversationId
   } = useConversationHandler();
 
-  // Get patient records state and functions from context
   const {
     patientRecords,
     selectedRecords,
@@ -292,45 +277,37 @@ const ChatPage = () => {
     openMemoryModal,
     closeMemoryModal
   } = usePatientRecords();
-  
-  // Debounced auto-save to prevent blocking navigation
+
   const debouncedAutoSave = useMemo(
     () => debounce((messages, conversationId) => {
       if (messages.length > 0 && conversationId) {
         autoSaveCurrentConversation(messages);
       }
-    }, 500), // 500ms delay
+    }, 500),
     [autoSaveCurrentConversation]
   );
-  
-  // Handle navigation state from conversations history page - SIMPLIFIED
+
   useEffect(() => {
     if (location.state?.selectedConversation) {
       const conversation = location.state.selectedConversation;
       setMessages(conversation.messages);
       setCurrentConversationId(conversation.id);
-      // Clear the navigation state after handling it
       window.history.replaceState({}, document.title);
     } else if (location.state?.createNew) {
       const newConv = createNewConversation();
       setMessages([]);
       setCurrentConversationId(newConv.id);
-      // Clear the navigation state after handling it
       window.history.replaceState({}, document.title);
     }
   }, [location.state, setMessages, setCurrentConversationId, createNewConversation]);
-  
-  // Auto-save conversation when messages change (debounced to prevent blocking)
+
   useEffect(() => {
     debouncedAutoSave(messages, currentConversationId);
-    
-    // Cleanup debounced function
     return () => {
       debouncedAutoSave.cancel();
     };
   }, [messages, currentConversationId, debouncedAutoSave]);
 
-  // Only create new conversation when user actually starts interacting
   const ensureConversationExists = useCallback(() => {
     if (!currentConversationId) {
       const newConv = createNewConversation();
@@ -339,35 +316,27 @@ const ChatPage = () => {
     }
     return currentConversationId;
   }, [currentConversationId, createNewConversation, setCurrentConversationId]);
-  
-  // Check if we're waiting for the assistant to complete a response
-  const waitingForResponse = messages.length > 0 && 
-    messages[messages.length - 1].role === 'assistant' && 
+
+  const waitingForResponse = messages.length > 0 &&
+    messages[messages.length - 1].role === 'assistant' &&
     !messages[messages.length - 1].complete;
-  
-  // Wrap the original generateResponse to include selected records
+
   const handleGenerateResponse = useCallback((inputData) => {
     const systemMessage = createSystemMessage();
-    
-    // Always include system message with the input if available
     if (systemMessage) {
-      // Display a notification about using patient records as context (only once per session)
       if (!sessionStorage.getItem('systemPromptNotified')) {
-        // Add a brief system notification to the messages (visible to user)
         setMessages(prev => [
-          ...prev, 
+          ...prev,
           {
             role: 'system',
             content: 'Using patient records and information as context for this conversation.',
             timestamp: new Date().toISOString(),
             complete: true,
-            isNotification: true // Flag to style differently
+            isNotification: true
           }
         ]);
         sessionStorage.setItem('systemPromptNotified', 'true');
       }
-      
-      // Pass the system prompt to the LLM
       generateResponse({
         ...inputData,
         systemPrompt: systemMessage
@@ -377,20 +346,8 @@ const ChatPage = () => {
     }
   }, [generateResponse, createSystemMessage, setMessages]);
 
-  const handleSelectConversation = (conversation) => {
-    setMessages(conversation.messages);
-    setCurrentConversationId(conversation.id);
-  };
-
-  const handleCreateNewConversation = () => {
-    const newConv = createNewConversation();
-    setMessages([]);
-    setCurrentConversationId(newConv.id);
-  };
-
   const handleClearConversation = () => {
     clearConversation();
-    // Just clear the current conversation ID, don't create a new one immediately
     setCurrentConversationId(null);
   };
 
@@ -421,7 +378,7 @@ const ChatPage = () => {
   return (
     <div className="flex flex-col h-full bg-primary-50/50">
       <AICoreSelector models={MediGemmaModels} />
-      
+
       <div className="bg-white border-b border-primary-200 px-4 py-2">
         <div className="flex items-center justify-between">
           <div className="text-sm text-primary-600 font-medium">Messages: {messages.length}</div>
@@ -433,7 +390,6 @@ const ChatPage = () => {
               <Database className="w-4 h-4" />
               <span>Patient Records ({selectedRecords.length})</span>
             </button>
-            
             <button
               onClick={exportCurrentConversation}
               disabled={messages.length === 0}
@@ -453,7 +409,7 @@ const ChatPage = () => {
           </div>
         </div>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto p-4">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-primary-400">
@@ -463,42 +419,12 @@ const ChatPage = () => {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* --- REFACTORED MESSAGE LIST --- */}
             {messages.map((msg, index) => (
-              <div 
-                key={index} 
-                className={`flex ${
-                  msg.role === 'user' 
-                    ? 'justify-end' 
-                    : msg.role === 'system' && msg.isNotification
-                      ? 'justify-center'
-                      : 'justify-start'
-                }`}
-              >
-                <div 
-                  className={`${
-                    msg.role === 'user' 
-                      ? 'bg-primary-100 text-primary-800 max-w-3xl rounded-lg p-4' 
-                      : msg.role === 'system' && msg.isNotification
-                        ? 'bg-primary-50 text-primary-600 border border-primary-200 rounded-full px-4 py-2 text-sm font-medium flex items-center'
-                        : 'bg-white border border-primary-200 shadow-sm text-primary-900 max-w-3xl rounded-lg p-4'
-                  }`}
-                >
-                  {msg.role === 'system' && msg.isNotification && (
-                    <Database className="w-4 h-4 mr-2 text-primary-500" />
-                  )}
-                  {msg.content}
-                  {msg.imageUrl && (
-                    <div className="mt-3">
-                      <img 
-                        src={msg.imageUrl} 
-                        alt="Uploaded medical image" 
-                        className="max-h-64 rounded-lg border border-primary-200"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
+              <MessageBubble key={index} message={msg} />
             ))}
+            {/* --- END REFACTORED MESSAGE LIST --- */}
+
             {isLoading && (
               <div className="flex justify-start">
                 <div className="max-w-3xl rounded-lg p-4 bg-white border border-primary-200 shadow-sm">
@@ -513,17 +439,16 @@ const ChatPage = () => {
           </div>
         )}
       </div>
-      
+
       <div className="border-t border-primary-200 p-4 bg-primary-50/50 mt-auto">
-        <MultimodalInput 
-          onSubmit={handleGenerateResponse} 
-          isLoading={isLoading} 
+        <MultimodalInput
+          onSubmit={handleGenerateResponse}
+          isLoading={isLoading}
           waitingForResponse={waitingForResponse}
           ensureConversationExists={ensureConversationExists}
         />
       </div>
-      
-      {/* Memory Management Modal */}
+
       <MemoryManagementModal
         isOpen={isMemoryModalOpen}
         onClose={closeMemoryModal}

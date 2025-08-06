@@ -453,7 +453,13 @@ export const useGemma = () => {
   };
 
   // Helper function to validate and clean the response
-  const validateAndCleanResponse = (response) => {
+ const validateAndCleanResponse = (response) => {
+    // **** FIX: Add a check to handle the health score format FIRST ****
+    if (response && typeof response.score === 'number' && typeof response.opinion === 'string') {
+      // If it's a valid health score object, return it immediately.
+      return response;
+    }
+
     const allowedCategories = ['General', 'Radiology', 'Blood Work', 'Cardiology', 'Dermatology', 'Endocrinology', 'Neurology', 'Physical Therapy', 'Prescription', 'Other'];
     
     // If the response has medication field, return it as is for prescription processing
@@ -461,15 +467,16 @@ export const useGemma = () => {
       return response;
     }
     
+    // Fallback for general medical records
     return {
       title: typeof response.title === 'string' ? response.title.trim() : 'Medical Record Analysis',
       category: allowedCategories.includes(response.category) ? response.category : 'General',
       notes: typeof response.notes === 'string' ? response.notes.trim() : 'AI-generated medical document analysis',
       analysis: typeof response.analysis === 'string' ? response.analysis.trim() : 'Unable to generate detailed analysis from the provided document.',
-      // Preserve imageUrl if it exists
       ...(response.imageUrl && { imageUrl: response.imageUrl })
     };
   };
+
 
   // Updated generateStructuredResponse function to handle server's JSON response format
   const generateStructuredResponse = useCallback(async (inputData) => {

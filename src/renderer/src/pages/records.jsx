@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Database, Search, ChevronDown, ChevronRight, Plus, FileText, ImageIcon, FileAudio, Eye, Trash2, Edit } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Database, Search, ChevronDown, ChevronRight, Plus, FileText, ImageIcon, FileAudio, Trash2, Edit } from 'lucide-react';
 import { useGemma } from '../api/gemma';
 import { useRecordManagement, getFileIcon } from '../api/recordManagement.jsx';
 import AddRecordModal from '../components/AddRecordModal';
@@ -9,14 +9,13 @@ const Records = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showWebcam, setShowWebcam] = useState(false); // State for webcam modal
-  const [analysisMode, setAnalysisMode] = useState('ocr'); // 'ocr' or 'vision'
+  const [showWebcam, setShowWebcam] = useState(false);
+  const [analysisMode, setAnalysisMode] = useState('ocr');
 
-  const fileInputRef = useRef(null);
-  const videoRef = useRef(null); // Ref for webcam video element
-  const webcamStreamRef = useRef(null); // Ref to store the webcam stream
+  const videoRef = useRef(null);
+  const webcamStreamRef = useRef(null);
 
-  // Get all the Gemma functions including OCR-specific ones
+  // Get all the Gemma functions
   const { 
     generateStructuredResponse, 
     isLoading,
@@ -25,7 +24,7 @@ const Records = () => {
     progress: gemmaProgress
   } = useGemma();
   
-  // Use the record management hook with both standard and OCR-specific functions
+  // Use the record management hook, which now handles its own data loading
   const recordManager = useRecordManagement(
     generateStructuredResponse, 
     isLoading,
@@ -33,22 +32,6 @@ const Records = () => {
     isLoadingGemma,
     gemmaProgress
   );
-  
-  useEffect(() => {
-    try {
-      const savedRecords = localStorage.getItem('medicalRecords');
-      if (savedRecords) {
-        setMedicalRecords(JSON.parse(savedRecords));
-      }
-    } catch (error) {
-      console.error('Error loading saved records:', error);
-    }
-  }, []);
-  
-  const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files);
-    recordManager.addFilesToState(files);
-  };
 
   // --- Webcam Functions ---
   const startWebcam = async () => {
@@ -90,7 +73,7 @@ const Records = () => {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const fileName = `webcam-${timestamp}.jpg`;
       const imageFile = new File([blob], fileName, { type: 'image/jpeg' });
-      recordManager.addFilesToState([imageFile]); // Use the centralized function in recordManager
+      recordManager.addFilesToState([imageFile]);
       stopWebcam();
     }, 'image/jpeg');
   };
@@ -111,31 +94,23 @@ const Records = () => {
     }
   };
   
-  // Handle analysis with selected mode
   const handleAnalyzeWithMode = () => {
     recordManager.analyzeAndPopulate(analysisMode);
   };
   
-  // Handle record deletion
   const handleDeleteRecord = (recordId, event) => {
-    event.stopPropagation(); // Prevent expanding the record when clicking delete
-    const success = recordManager.deleteRecord(recordId);
-    if (success) {
-      // Record was successfully deleted
-      console.log(`Record ${recordId} deleted successfully`);
-    }
+    event.stopPropagation();
+    recordManager.deleteRecord(recordId);
   };
   
-  // Handle edit record
   const handleEditRecord = (recordId, event) => {
-    event.stopPropagation(); // Prevent expanding the record when clicking edit
+    event.stopPropagation();
     const recordToEdit = recordManager.prepareRecordForEdit(recordId);
     if (recordToEdit) {
       setShowEditModal(true);
     }
   };
   
-  // Handle record update
   const handleUpdateRecord = () => {
     const success = recordManager.updateRecord();
     if (success) {
@@ -143,15 +118,12 @@ const Records = () => {
     }
   };
   
-  // Get filtered records based on search term
   const filteredRecords = recordManager.getFilteredRecords(searchTerm);
 
-  // Use the getFileIcon from recordManagement with the icons
   const renderFileIcon = (type) => {
     return getFileIcon(type, { ImageIcon, FileAudio, FileText });
   };
-
-
+  console.log("Current Records:", recordManager.medicalRecords);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -227,29 +199,50 @@ const Records = () => {
               </div>
               
               {record.expanded && (
-                <div className="p-4 bg-gray-50 border-t border-gray-200">
+                <div className="p-4 bg-gray-50 border-t border-gray-200 space-y-4">
+                  {/* Description / Content */}
                   {record.content && (
-                    <div className="mb-4">
+                    <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
-                      <p className="text-gray-600">{record.content}</p>
+                      <p className="text-gray-600 whitespace-pre-wrap">{record.content}</p>
                     </div>
                   )}
-                  
-                  {record.files && record.files.length > 0 && (
+
+                  {/* Category */}
+                  {record.category && (
                     <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Attached Files</h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                        {record.files.map((file, index) => (
-                          <div key={index} className="border border-gray-200 rounded p-2 bg-white">
-                            <div className="flex items-center justify-center h-24 bg-gray-100 rounded mb-2">
-                              {renderFileIcon(file.type || 'text')}
-                            </div>
-                            <p className="text-xs text-center text-gray-600 truncate">{file.name}</p>
-                          </div>
-                        ))}
+                      <h4 className="text-sm font-medium text-gray-700 mb-1">Category</h4>
+                      <span className="inline-block bg-teal-100 text-teal-800 text-sm font-semibold mr-2 px-3 py-1 rounded-full">
+                        {record.category}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* AI Analysis Result */}
+                  {record.analysis && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">🤖 AI Analysis</h4>
+                      <div className="bg-white p-3 rounded-md border border-gray-200">
+                        <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans">{record.analysis}</pre>
                       </div>
                     </div>
                   )}
+                  
+                  {/* Analyzed Image - Using the corrected 'imageUrl' property */}
+                  {record.returnedImageUrl && (
+                    <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Analyzed Image</h4>
+                        <div className="flex justify-center p-2 bg-white border rounded-md">
+                           <img 
+                            src={record.returnedImageUrl} 
+                            alt="Analyzed medical document" 
+                            className="rounded-lg max-w-full h-auto md:max-w-md shadow-sm"
+                          />
+                        </div>
+                    </div>
+                  )}
+
+                  
                 </div>
               )}
             </div>
@@ -270,6 +263,7 @@ const Records = () => {
         </div>
       )}
 
+      {/* Modals */}
       <AddRecordModal
         showModal={showAddModal}
         onClose={handleCloseModal}
@@ -280,7 +274,6 @@ const Records = () => {
         returnedImageUrl={recordManager.returnedImageUrl}
         setReturnedImageUrl={recordManager.setReturnedImageUrl}
         isAnalyzing={recordManager.isAnalyzing}
-        setIsAnalyzing={recordManager.setIsAnalyzing}
         analysisProgress={recordManager.analysisProgress}
         showWebcam={showWebcam}
         setShowWebcam={setShowWebcam}
@@ -296,7 +289,6 @@ const Records = () => {
         getFileIcon={renderFileIcon}
         analysisMode={analysisMode}
         setAnalysisMode={setAnalysisMode}
- 
       />
 
       <EditRecordModal
@@ -309,7 +301,6 @@ const Records = () => {
         returnedImageUrl={recordManager.returnedImageUrl}
         setReturnedImageUrl={recordManager.setReturnedImageUrl}
         isAnalyzing={recordManager.isAnalyzing}
-        setIsAnalyzing={recordManager.setIsAnalyzing}
         analysisProgress={recordManager.analysisProgress}
         showWebcam={showWebcam}
         setShowWebcam={setShowWebcam}
@@ -325,7 +316,6 @@ const Records = () => {
         getFileIcon={renderFileIcon}
         analysisMode={analysisMode}
         setAnalysisMode={setAnalysisMode}
- 
       />
     </div>
   );

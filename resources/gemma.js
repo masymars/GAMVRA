@@ -98,22 +98,36 @@ try {
 // =================================================================
 // ## 2. ONNX Pose Estimation Model Configuration & Loading
 // =================================================================
-let poseSession;
+let poseSession; // For head.onnx
+let chestPoseSession; // For chest.onnx
 const POSE_MODEL_PATH = path.join(__dirname, 'head.onnx');
+const CHEST_POSE_MODEL_PATH = path.join(__dirname, 'chest.onnx'); // Path for the new model
 const MODEL_INPUT_WIDTH = 640;
 const MODEL_INPUT_HEIGHT = 640;
 
-async function loadPoseModel() {
-    console.log("\n--- Loading YOLOv8 Pose Estimation Model ---");
+async function loadAllPoseModels() {
+    console.log("\n--- Loading YOLOv8 Pose Estimation Models ---");
+    // Load Head Model
     if (!fs.existsSync(POSE_MODEL_PATH)) {
-        console.error(`❌ Pose estimation model not found: ${POSE_MODEL_PATH}`);
-        return;
+        console.error(`❌ Head pose model not found: ${POSE_MODEL_PATH}`);
+    } else {
+        try {
+            poseSession = await onnx.InferenceSession.create(POSE_MODEL_PATH);
+            console.log("✅ Head pose model loaded successfully!");
+        } catch (e) {
+            console.error("❌ Failed to load the head ONNX pose model:", e);
+        }
     }
-    try {
-        poseSession = await onnx.InferenceSession.create(POSE_MODEL_PATH);
-        console.log("✅ Pose estimation model loaded successfully!");
-    } catch (e) {
-        console.error("❌ Failed to load the ONNX pose model:", e);
+    // Load Chest Model
+    if (!fs.existsSync(CHEST_POSE_MODEL_PATH)) {
+        console.error(`❌ Chest pose model not found: ${CHEST_POSE_MODEL_PATH}`);
+    } else {
+        try {
+            chestPoseSession = await onnx.InferenceSession.create(CHEST_POSE_MODEL_PATH);
+            console.log("✅ Chest pose model loaded successfully!");
+        } catch (e) {
+            console.error("❌ Failed to load the chest ONNX pose model:", e);
+        }
     }
 }
 
@@ -183,37 +197,48 @@ function processPoseOutput(output, originalWidth, originalHeight) {
     return keypoints;
 }
 
-function drawKeypoints(ctx, keypoints) {
-    ctx.fillStyle = '#00FF00';
+function drawKeypoints(ctx, keypoints, pointsToHighlight = []) {
+    ctx.fillStyle = 'rgba(0, 128, 128, 0.6)'; // Teal green with 60% opacity
     ctx.lineWidth = 3;
-    keypoints.forEach(kp => {
-        if (kp.confidence > 0.5) {
-            ctx.beginPath();
-            ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
-            ctx.fill();
+
+    if (pointsToHighlight.length === 0) {
+        return;
+    }
+
+    pointsToHighlight.forEach(index => {
+        if (index >= 0 && index < keypoints.length) {
+            const kp = keypoints[index];
+            if (kp.confidence > 0.5) {
+                ctx.beginPath();
+                ctx.arc(kp.x, kp.y, 20, 0, 2 * Math.PI); // Bigger radius
+                ctx.fill();
+            }
         }
     });
 }
 
-async function getPoseEstimationFrame(imageBuffer) {
-    if (!poseSession) {
-        throw new Error("Pose estimation model is not loaded.");
+
+
+async function getPoseEstimationFrame(session, imageBuffer, pointsToHighlight = []) {
+    if (!session) {
+        throw new Error("The requested pose estimation model is not loaded.");
     }
     const image = await loadImage(imageBuffer);
     const { width: originalWidth, height: originalHeight } = image;
     const inputTensor = await preProcessPoseImage(image);
     const feeds = { 'images': inputTensor };
-    const results = await poseSession.run(feeds);
+    const results = await session.run(feeds);
     const keypoints = processPoseOutput(results.output0, originalWidth, originalHeight);
+
     const canvas = createCanvas(originalWidth, originalHeight);
     const ctx = canvas.getContext('2d');
     ctx.drawImage(image, 0, 0, originalWidth, originalHeight);
+
     if (keypoints.length > 0) {
-        drawKeypoints(ctx, keypoints);
+        drawKeypoints(ctx, keypoints, pointsToHighlight);
     }
     return canvas.toBuffer('image/jpeg');
 }
-
 // =================================================================
 // ## 4. API Endpoints
 // =================================================================
@@ -500,19 +525,37 @@ app.get('/health', (req, res) => {
 });
 
 // --- Pose estimation endpoint ---
-app.post('/pose-estimation', upload.single('image'), async (req, res) => {
+const httpPoseEstimationHandler = async (req, res, session) => {
     if (!req.file) {
         return res.status(400).json({ error: "No image file uploaded." });
     }
+    if (!session) {
+        return res.status(503).json({ error: "The corresponding model for this endpoint is not available." });
+    }
     try {
-        const finalImageBuffer = await getPoseEstimationFrame(req.file.buffer);
+        let pointsToHighlight = [];
+        if (req.body.points) {
+            try {
+                pointsToHighlight = JSON.parse(req.body.points);
+                if (!Array.isArray(pointsToHighlight)) throw new Error();
+            } catch (e) {
+                return res.status(400).json({ error: "Invalid 'points' field." });
+            }
+        }
+
+        const finalImageBuffer = await getPoseEstimationFrame(session, req.file.buffer, pointsToHighlight);
         res.setHeader('Content-Type', 'image/jpeg');
         res.send(finalImageBuffer);
     } catch (error) {
         console.error("Error during HTTP pose estimation:", error);
-        res.status(500).json({ error: "An internal server error occurred during pose estimation." });
+        res.status(500).json({ error: "An internal server error occurred." });
     }
-});
+};
+
+// --- Pose estimation endpoints for specific models ---
+app.post('/pose-estimation', upload.single('image'), (req, res) => httpPoseEstimationHandler(req, res, poseSession));
+app.post('/pose-estimation2', upload.single('image'), (req, res) => httpPoseEstimationHandler(req, res, chestPoseSession));
+
 
 
 
@@ -730,8 +773,38 @@ wss.on('connection', (ws) => {
 
     ws.on('message', async (message) => {
         try {
-            // The resources here are scoped to the message event and are garbage collected automatically.
-            const processedImageBuffer = await getPoseEstimationFrame(message);
+            const payload = JSON.parse(message);
+            
+            if (!payload.frame) {
+                return; // Ignore messages without a frame
+            }
+            
+            // Determine which model session to use based on the payload
+            let sessionToUse;
+            switch(payload.bodyPart) {
+                case 'head':
+                    sessionToUse = poseSession;
+                    break;
+                case 'chest':
+                    sessionToUse = chestPoseSession;
+                    break;
+                default:
+                    // Default to the head model if not specified or unknown
+                    sessionToUse = poseSession;
+            }
+
+            if (!sessionToUse) {
+                console.warn(`Model for '${payload.bodyPart}' not loaded. Cannot process frame.`);
+                // Optionally send an error back to the client
+                // ws.send(JSON.stringify({ error: `Model for '${payload.bodyPart}' not available.`}));
+                return;
+            }
+
+            const imageBuffer = Buffer.from(payload.frame, 'base64');
+            const pointsToHighlight = payload.points || [];
+
+            const processedImageBuffer = await getPoseEstimationFrame(sessionToUse, imageBuffer, pointsToHighlight);
+            
             if (ws.readyState === ws.OPEN) {
                 ws.send(processedImageBuffer);
             }
@@ -751,7 +824,7 @@ wss.on('connection', (ws) => {
 
 server.listen(port, async () => {
     console.log(`\n🚀 Server starting at http://localhost:${port}`);
-    await loadPoseModel();
+    await loadAllPoseModels();
     console.log("\n✅ All models loaded. Server is ready to accept requests.");
     console.log(`- HTTP Endpoints are active.`);
     console.log(`- WebSocket Endpoint is active at ws://localhost:${port}`);

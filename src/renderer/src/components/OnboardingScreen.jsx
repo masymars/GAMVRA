@@ -147,7 +147,7 @@ const OnboardingScreen = ({ onComplete }) => {
             <div className="space-y-3">
               <label className="block text-sm font-medium text-gray-700">Sex</label>
               <div className="space-y-2">
-                {['Male', 'Female', 'Other'].map((option) => (
+                {['Male', 'Female'].map((option) => (
                   <div
                     key={option}
                     onClick={() => handleInputChange({ target: { name: 'sex', value: option } })}

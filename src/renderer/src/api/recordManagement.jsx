@@ -26,7 +26,8 @@ const extractFieldFromText = (text, field) => {
   return null;
 };
 
-export const useRecordManagement = (generateStructuredResponse, isLoading, generateOCRResponse, isLoadingGemma, gemmaProgress) => {
+export const useRecordManagement = (generateStructuredResponse, isLoading, 
+  generateOCRResponse, isLoadingGemma, gemmaProgress) => {
   const [medicalRecords, setMedicalRecords] = useState([]);
   const [expandedRecords, setExpandedRecords] = useState({});
   const [newRecord, setNewRecord] = useState({
@@ -112,12 +113,10 @@ export const useRecordManagement = (generateStructuredResponse, isLoading, gener
     console.log(`✅ Analysis state set to true (${mode} mode)`);
 
     try {
-      // Get the first file for analysis
       const fileToAnalyze = newRecord.files[0].file;
       let structuredData;
       
       if (mode === 'ocr' && generateOCRResponse) {
-        // Use Gemma's specialized OCR function for OCR mode
         console.log('🚀 Using generateOCRResponse for OCR analysis...');
         
         const prompt = `Analyze this medical document and extract ALL relevant information.
@@ -132,57 +131,94 @@ export const useRecordManagement = (generateStructuredResponse, isLoading, gener
         Focus on extracting text information and interpreting medical values, results, or instructions.
         Return ONLY the JSON object without any additional text or formatting.`;
         
-        // Call the OCR-specific function from Gemma
         const ocrResponse = await generateOCRResponse(fileToAnalyze, prompt);
         console.log('📊 Received OCR response:', ocrResponse);
         
-        // Process the OCR response
         structuredData = processOCRResponse(ocrResponse);
+
       } else {
-        // For vision mode or if OCR function is not available, use the general function
         console.log(`🚀 Using generateStructuredResponse for ${mode.toUpperCase()} analysis...`);
         
-        // Different prompts based on the selected mode
-        const prompt = mode === 'ocr' 
-          ? `You are a medical document analyzer with OCR capabilities. Analyze the attached medical document and extract all relevant textual information. Return ONLY a valid JSON object with no additional text, explanations, or formatting.
+        const prompt = mode === 'ocr'
+
+? `You are a medical document analyzer with OCR capabilities. Analyze the attached medical document and extract all relevant textual information. Return ONLY a valid JSON object with no additional text, explanations, or formatting.
+
+
 
 CRITICAL INSTRUCTIONS:
+
 - Return ONLY raw JSON - no markdown, no backticks, no explanatory text
+
 - Do not include any text before or after the JSON object
+
 - Follow the exact schema provided below
+
 - Ensure all string values are properly quoted
+
 - Do not include any line breaks within string values
+
 - ANALYSIS GUIDELINES: Focus on extracting and interpreting text information from the document. Identify key measurements, values, and what they typically represent.
 
+
+
 Required JSON Schema:
+
 {
-  "title": "A concise, descriptive title for the medical record based on textual content (e.g., 'Annual Check-up Results 2024', 'MRI Report for Left Knee')",
-  "category": "Choose exactly one: General, Radiology, Blood Work, Cardiology, Dermatology, Skin Imaging, Mole & Lesion Analysis, Wound Assessment, Rash & Skin Condition, Body Part Examination, Joint & Limb Analysis, Posture Assessment, X-Ray Analysis, MRI/CT Scan, Ultrasound Imaging, Endocrinology, Neurology, Physical Therapy, Prescription, Other",
-  "notes": "A brief 1-2 sentence summary of the document's purpose or key findings based on text extraction",
-  "analysis": "A detailed factual interpretation of the text extracted from the document. Focus on numeric values, measurements, test results, prescriptions, and clinical observations found in the document text."
+
+"title": "A concise, descriptive title for the medical record based on textual content (e.g., 'Annual Check-up Results 2024', 'MRI Report for Left Knee')",
+
+"category": "Choose exactly one: General, Radiology, Blood Work, Cardiology, Dermatology, Skin Imaging, Mole & Lesion Analysis, Wound Assessment, Rash & Skin Condition, Body Part Examination, Joint & Limb Analysis, Posture Assessment, X-Ray Analysis, MRI/CT Scan, Ultrasound Imaging, Endocrinology, Neurology, Physical Therapy, Prescription, Other",
+
+"notes": "A brief 1-2 sentence summary of the document's purpose or key findings based on text extraction",
+
+"analysis": "A detailed factual interpretation of the text extracted from the document. Focus on numeric values, measurements, test results, prescriptions, and clinical observations found in the document text."
+
 }
+
+
 
 Return the JSON object now:`
-          : `You are a medical image analyzer with computer vision capabilities. Analyze the attached medical image and focus on visual features, anomalies, and patterns. Return ONLY a valid JSON object with no additional text, explanations, or formatting.
+
+: `You are a medical image analyzer with computer vision capabilities. Analyze the attached medical image and focus on visual features, anomalies, and patterns. Return ONLY a valid JSON object with no additional text, explanations, or formatting.
+
+
 
 CRITICAL INSTRUCTIONS:
+
 - Return ONLY raw JSON - no markdown, no backticks, no explanatory text
+
 - Do not include any text before or after the JSON object
+
 - Follow the exact schema provided below
+
 - Ensure all string values are properly quoted
+
 - Do not include any line breaks within string values
+
 - ANALYSIS GUIDELINES: Focus on visual features, patterns, and anomalies in the image. Describe what you see without making diagnostic claims. Identify visible structures, areas of interest, and notable visual characteristics.
 
+
+
 Required JSON Schema:
+
 {
-  "title": "A concise, descriptive title for the medical image (e.g., 'Chest X-Ray', 'Skin Lesion Image', 'Wound Assessment')",
-  "category": "Choose exactly one: General, Radiology, Blood Work, Cardiology, Dermatology, Skin Imaging, Mole & Lesion Analysis, Wound Assessment, Rash & Skin Condition, Body Part Examination, Joint & Limb Analysis, Posture Assessment, X-Ray Analysis, MRI/CT Scan, Ultrasound Imaging, Endocrinology, Neurology, Physical Therapy, Prescription, Other",
-  "notes": "A brief 1-2 sentence summary of what the image shows visually",
-  "analysis": "A detailed description of the visual features in the image. Include observations about colors, shapes, patterns, structures, anatomical features, or any notable visual characteristics. Describe the image in clinical terms but do not provide a diagnosis."
+
+"title": "A concise, descriptive title for the medical image (e.g., 'Chest X-Ray', 'Skin Lesion Image', 'Wound Assessment')",
+
+"category": "Choose exactly one: General, Radiology, Blood Work, Cardiology, Dermatology, Skin Imaging, Mole & Lesion Analysis, Wound Assessment, Rash & Skin Condition, Body Part Examination, Joint & Limb Analysis, Posture Assessment, X-Ray Analysis, MRI/CT Scan, Ultrasound Imaging, Endocrinology, Neurology, Physical Therapy, Prescription, Other",
+
+"notes": "A brief 1-2 sentence summary of what the image shows visually",
+
+"analysis": "A detailed description of the visual features in the image. Include observations about colors, shapes, patterns, structures, anatomical features, or any notable visual characteristics. Describe the image in clinical terms but do not provide a diagnosis."
+
 }
 
+
+
 Return the JSON object now:`;
-        
+
+
+
         const promptFiles = [{
           file: fileToAnalyze,
           name: newRecord.files[0].name,
@@ -192,20 +228,16 @@ Return the JSON object now:`;
         const inputData = { text: prompt, files: promptFiles, mode: mode };
         console.log('Input data:', inputData);
         
-        // Call the general function for analysis
         const response = await generateStructuredResponse(inputData);
         console.log('📊 Received structured response:', response);
         
-        // Process the structured response
         structuredData = processStructuredResponse(response);
       }
       
-      // Update the form fields with the parsed data
       console.log('📝 Updating form fields with:');
       console.log('- Title:', structuredData.title);
       console.log('- Category:', structuredData.category);
       console.log('- Notes:', structuredData.notes);
-      console.log('- Analysis:', structuredData.analysis?.substring(0, 100) + '...');
       
       setNewRecord(prev => ({
         ...prev,
@@ -218,27 +250,17 @@ Return the JSON object now:`;
       
       if (structuredData.imageUrl) {
         setReturnedImageUrl(structuredData.imageUrl);
-        console.log('🖼️ Received image URL from AI:', structuredData.imageUrl);
+        console.log('🖼️ Received and set image URL from AI:', structuredData.imageUrl);
       }
       
       console.log(`✅ Analysis with ${mode.toUpperCase()} completed successfully`);
-      setAnalysisProgress(100); // Set to 100% when done
+      setAnalysisProgress(100);
       
     } catch (error) {
       console.error(`❌ ${mode.toUpperCase()} analysis error:`, error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        files: newRecord.files.map(f => ({ name: f.name, type: f.file?.type }))
-      });
-      
-      // Set a more informative error message
-      setAnalysis(`Error analyzing files with ${mode.toUpperCase()}: ${error.message}\n\nPlease check that:\n1. The AI server is running on localhost:3010\n2. The uploaded file is a valid medical ${mode === 'ocr' ? 'document' : 'image'}\n3. Check the browser console for more details`);
-      
-      // Show an alert with actionable information
-      alert(`${mode.toUpperCase()} analysis failed: ${error.message}\n\nPlease check the browser console for more details and ensure the AI server is running.`);
-      
-      setAnalysisProgress(0); // Reset progress on error
+      setAnalysis(`Error analyzing files with ${mode.toUpperCase()}: ${error.message}`);
+      alert(`${mode.toUpperCase()} analysis failed: ${error.message}`);
+      setAnalysisProgress(0);
     } finally {
       setIsAnalyzing(false);
       console.log(`🏁 Analysis state set to false (${mode} mode)`);
@@ -247,119 +269,69 @@ Return the JSON object now:`;
 
   // Helper function to process OCR response from Gemma
   const processOCRResponse = (response) => {
+    let structuredResult = {};
+    // **FIX**: Capture imageUrl at the beginning
+    const potentialImageUrl = response.imageUrl || null;
+
     try {
-      // Check if the response already has a parsed structure
       if (response && typeof response === 'object') {
         if (response.llmResponse) {
-          // If response has llmResponse field, try to extract JSON from it
           const jsonString = response.llmResponse.replace(/```json\n|\n```/g, '');
           try {
-            const parsedData = JSON.parse(jsonString);
-            return validateResponseData(parsedData);
+            structuredResult = validateResponseData(JSON.parse(jsonString));
           } catch (parseError) {
             console.error('❌ Failed to parse JSON from llmResponse:', parseError);
-            // If parsing fails, use extractFieldFromText as fallback
-            return {
-              title: extractFieldFromText(response.llmResponse, 'title') || extractFieldFromText(response.extractedText, 'title') || 'Medical Document Analysis',
+            structuredResult = {
+              title: extractFieldFromText(response.llmResponse, 'title') || 'Medical Document Analysis',
               category: extractFieldFromText(response.llmResponse, 'category') || 'General',
               notes: extractFieldFromText(response.llmResponse, 'notes') || 'AI-generated OCR analysis',
               analysis: response.llmResponse || response.extractedText || 'Unable to generate detailed analysis'
             };
           }
-        } else if (response.extractedText) {
-          // If only extractedText is available
-          return {
-            title: 'Medical Document Analysis',
-            category: 'General',
-            notes: 'Extracted text from medical document',
-            analysis: response.extractedText
-          };
         } else {
-          // Direct object with expected fields
-          return validateResponseData(response);
+          structuredResult = validateResponseData(response);
         }
-      } 
-      
-      // If response is a string, try to parse it as JSON
-      if (typeof response === 'string') {
+      } else if (typeof response === 'string') {
+        let cleanResponse = response.trim().replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+        const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) cleanResponse = jsonMatch[0];
         try {
-          // Clean the response string
-          let cleanResponse = response.trim();
-          
-          // Remove any markdown formatting
-          cleanResponse = cleanResponse.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
-          cleanResponse = cleanResponse.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
-          
-          // Extract JSON object if there's surrounding text
-          const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            cleanResponse = jsonMatch[0];
-          }
-          
-          // Parse the JSON
-          const parsedData = JSON.parse(cleanResponse);
-          return validateResponseData(parsedData);
-        } catch (parseError) {
-          console.error('❌ Failed to parse string response as JSON:', parseError);
-          return {
-            title: extractFieldFromText(response, 'title') || 'Medical Document Analysis',
-            category: extractFieldFromText(response, 'category') || 'General',
-            notes: extractFieldFromText(response, 'notes') || 'AI-generated OCR analysis',
-            analysis: response
-          };
+            structuredResult = validateResponseData(JSON.parse(cleanResponse));
+        } catch (e) {
+            structuredResult = { analysis: response }; // Fallback
         }
       }
-      
-      // Fallback for unexpected response formats
-      console.warn('⚠️ Unexpected OCR response format:', response);
-      return {
-        title: 'Medical Document Analysis',
-        category: 'General',
-        notes: 'AI-generated OCR analysis',
-        analysis: JSON.stringify(response, null, 2)
-      };
     } catch (error) {
-      console.error('❌ Error processing OCR response:', error);
-      return {
-        title: 'Medical Document Analysis',
-        category: 'General',
-        notes: 'Error processing OCR response',
-        analysis: 'An error occurred while processing the OCR results. Please try again.'
-      };
+        console.error('❌ Error processing OCR response:', error);
+        structuredResult = { analysis: 'Error processing OCR response.' };
     }
+    
+    // **FIX**: Add the captured imageUrl back to the final object
+    if (potentialImageUrl) {
+      structuredResult.imageUrl = potentialImageUrl;
+    }
+    
+    return structuredResult;
   };
 
   // Helper function to process structured response from general API
   const processStructuredResponse = (response) => {
-    // Similar to processOCRResponse but adapted for the structured response format
+    let structuredResult = {};
+    // **FIX**: Capture imageUrl at the beginning
+    const potentialImageUrl = response.imageUrl || null;
+
     try {
-      // Check if the response already has a parsed structure
       if (response && typeof response === 'object') {
-        return validateResponseData(response);
-      }
-      
-      // If response is a string, try to parse it as JSON
-      if (typeof response === 'string') {
+        structuredResult = validateResponseData(response);
+      } else if (typeof response === 'string') {
+        let cleanResponse = response.trim().replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+        const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) cleanResponse = jsonMatch[0];
         try {
-          // Clean the response string
-          let cleanResponse = response.trim();
-          
-          // Remove any markdown formatting
-          cleanResponse = cleanResponse.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
-          cleanResponse = cleanResponse.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
-          
-          // Extract JSON object if there's surrounding text
-          const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            cleanResponse = jsonMatch[0];
-          }
-          
-          // Parse the JSON
-          const parsedData = JSON.parse(cleanResponse);
-          return validateResponseData(parsedData);
+          structuredResult = validateResponseData(JSON.parse(cleanResponse));
         } catch (parseError) {
           console.error('❌ Failed to parse string response as JSON:', parseError);
-          return {
+          structuredResult = {
             title: extractFieldFromText(response, 'title') || 'Medical Image Analysis',
             category: extractFieldFromText(response, 'category') || 'General',
             notes: extractFieldFromText(response, 'notes') || 'AI-generated vision analysis',
@@ -367,27 +339,21 @@ Return the JSON object now:`;
           };
         }
       }
-      
-      // Fallback for unexpected response formats
-      console.warn('⚠️ Unexpected response format:', response);
-      return {
-        title: 'Medical Analysis',
-        category: 'General',
-        notes: 'AI-generated analysis',
-        analysis: JSON.stringify(response, null, 2)
-      };
     } catch (error) {
-      console.error('❌ Error processing response:', error);
-      return {
-        title: 'Medical Analysis',
-        category: 'General',
-        notes: 'Error processing response',
-        analysis: 'An error occurred while processing the results. Please try again.'
-      };
+        console.error('❌ Error processing response:', error);
+        structuredResult = { analysis: 'Error processing response.' };
     }
+
+    // **FIX**: Add the captured imageUrl back to the final object
+    if (potentialImageUrl) {
+      structuredResult.imageUrl = potentialImageUrl;
+    }
+    
+    return structuredResult;
   };
 
-  // Helper function to validate and ensure all required fields are present
+  // (The rest of your code: validateResponseData, saveRecord, etc. remains the same)
+  // ...
   const validateResponseData = (data) => {
     // Validate and set defaults for missing fields
     const requiredFields = ['title', 'category', 'notes', 'analysis'];

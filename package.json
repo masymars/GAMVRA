@@ -30,7 +30,10 @@
     "multer": "^2.0.2",
     "node": "^22.18.0",
     "onnxruntime-node": "^1.22.0-rev",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.7.1",
+    "react-syntax-highlighter": "^15.6.1",
+    "remark-gfm": "^4.0.1",
     "sharp": "^0.34.3",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
@@ -42,6 +45,7 @@
   "devDependencies": {
     "@electron-toolkit/eslint-config": "^2.0.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
+    "@tailwindcss/typography": "^0.5.16",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^37.2.5",
     "electron-builder": "^25.1.8",
@@ -61,23 +65,18 @@
     "directories": {
       "output": "dist"
     },
-       
-  "asar": true,
-    
+    "asar": true,
     "files": [
-  "out/**/*",
- 
-  "node_modules/**/*",
-  "package.json"
-],
-"extraResources": [
-  {
-    "from": "resources",
-    "to": "resources"
-  }
-],
-
-  
+      "out/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ],
     "buildDependenciesFromSource": false,
     "npmRebuild": false,
     "mac": {
@@ -85,10 +84,10 @@
         "dmg"
       ],
       "category": "public.app-category.utilities",
-        "gatekeeperAssess": false,  
-    "entitlements": null,
-    "hardenedRuntime": false,
-    "identity": null  
+      "gatekeeperAssess": false,
+      "entitlements": null,
+      "hardenedRuntime": false,
+      "identity": null
     },
     "win": {
       "target": [
