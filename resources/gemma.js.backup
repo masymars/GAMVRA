@@ -1,0 +1,431 @@
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+import http from 'http';
+import { WebSocketServer } from 'ws';
+
+import {
+    AutoProcessor,
+    AutoModelForImageTextToText,
+    TextStreamer,
+    load_image,
+} from "@hug            // Keep the uploaded image file for future reference (don't delete)
+            if (tempImagePath) {
+                console.log(`📁 Keeping uploaded file: ${tempImagePath}`);
+                if (imageUrl) {
+                    console.log(`🔗 Image accessible at: ${imageUrl}`);
+                }
+            }
+
+            console.log("✅ Cleanup complete. Server is ready for the next request.");ransformers";
+
+import wavefile from 'wavefile';
+import onnx from 'onnxruntime-node';
+import { createCanvas, loadImage } from 'canvas';
+
+// Get current directory for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// --- Server and Middleware Setup ---
+const app = express();
+const port = 3010;
+const upload = multer({ storage: multer.memoryStorage() }); // Use memory storage
+
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve uploaded images statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// --- Model Configuration ---
+let processor, model;
+const LOCAL_MODEL_PATH = path.join(__dirname, '/models/gemma-3n-E2B-it-ONNX');
+
+console.log("Starting server and loading local model...");
+console.log(`Model path: ${LOCAL_MODEL_PATH}`);
+
+if (!fs.existsSync(LOCAL_MODEL_PATH)) {
+    console.error(`❌ Model directory not found: ${LOCAL_MODEL_PATH}`);
+    console.error("Please download the model first.");
+    process.exit(1);
+}
+
+// --- Progress Callback ---
+const progress_callback = (progress) => {
+    const { status, file, progress: loaded, total } = progress;
+    if (status === 'initiate') return;
+    let sizeText = '';
+    if (total > 0) {
+        const loadedMB = (loaded / 1024 / 1024).toFixed(2);
+        const totalMB = (total / 1024 / 1024).toFixed(2);
+        const percentage = ((loaded / total) * 100).toFixed(2);
+        sizeText = `[${percentage}%] (${loadedMB}MB / ${totalMB}MB)`;
+    }
+    if (status === 'loading') {
+        process.stdout.write(`- Loading: ${file} ${sizeText}\r`);
+    } else if (status === 'done') {
+        process.stdout.write(`- Loaded: ${file.padEnd(50)} ${sizeText}\n`);
+    }
+};
+
+try {
+    console.log("Loading processor from local path...");
+    processor = await AutoProcessor.from_pretrained(LOCAL_MODEL_PATH, {
+        progress_callback,
+        local_files_only: true
+    });
+
+    console.log("Loading model from local path...");
+    model = await AutoModelForImageTextToText.from_pretrained(LOCAL_MODEL_PATH, {
+        dtype: {
+            embed_tokens: "q8",
+            audio_encoder: "q4",
+            vision_encoder: "fp16",
+            decoder_model_merged: "q4",
+        },
+        device: "cpu",
+        progress_callback,
+        local_files_only: true
+    });
+    console.log("✅ Local model loaded successfully!");
+} catch (e) {
+    console.error("❌ Failed to load local model:", e);
+    process.exit(1);
+}
+
+// =================================================================
+// ## 2. ONNX Pose Estimation Model Configuration & Loading
+// =================================================================
+let poseSession;
+const POSE_MODEL_PATH = path.join(__dirname, 'head.onnx');
+const MODEL_INPUT_WIDTH = 640;
+const MODEL_INPUT_HEIGHT = 640;
+
+async function loadPoseModel() {
+    console.log("\n--- Loading YOLOv8 Pose Estimation Model ---");
+    if (!fs.existsSync(POSE_MODEL_PATH)) {
+        console.error(`❌ Pose estimation model not found: ${POSE_MODEL_PATH}`);
+        return;
+    }
+    try {
+        poseSession = await onnx.InferenceSession.create(POSE_MODEL_PATH);
+        console.log("✅ Pose estimation model loaded successfully!");
+    } catch (e) {
+        console.error("❌ Failed to load the ONNX pose model:", e);
+    }
+}
+
+// --- Helper function to process audio ---
+async function processAudio(buffer) {
+    const wav = new wavefile.WaveFile(buffer);
+    wav.toBitDepth("32f");
+    wav.toSampleRate(processor.feature_extractor.config.sampling_rate);
+    let audioData = wav.getSamples();
+    if (Array.isArray(audioData)) {
+        if (audioData.length > 1) { // Stereo to mono
+            const mono = new Float32Array(audioData[0].length);
+            for (let i = 0; i < audioData[0].length; ++i) {
+                mono[i] = (audioData[0][i] + audioData[1][i]) / 2;
+            }
+            return mono;
+        }
+        audioData = audioData[0];
+    }
+    return audioData;
+}
+
+// =================================================================
+// ## 3. Helper Functions for Pose Estimation
+// =================================================================
+async function preProcessPoseImage(image) {
+    const canvas = createCanvas(MODEL_INPUT_WIDTH, MODEL_INPUT_HEIGHT);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, MODEL_INPUT_WIDTH, MODEL_INPUT_HEIGHT);
+    const imageData = ctx.getImageData(0, 0, MODEL_INPUT_WIDTH, MODEL_INPUT_HEIGHT);
+    const { data } = imageData;
+    const red = [], green = [], blue = [];
+    for (let i = 0; i < data.length; i += 4) {
+        red.push(data[i] / 255);
+        green.push(data[i + 1] / 255);
+        blue.push(data[i + 2] / 255);
+    }
+    const input = [...red, ...green, ...blue];
+    return new onnx.Tensor('float32', input, [1, 3, MODEL_INPUT_HEIGHT, MODEL_INPUT_WIDTH]);
+}
+
+function processPoseOutput(output, originalWidth, originalHeight) {
+    const boxes = [];
+    const [batchSize, numChannels, numBoxes] = output.dims;
+    for (let i = 0; i < numBoxes; i++) {
+        const boxData = [];
+        for (let j = 0; j < numChannels; j++) boxData.push(output.data[j * numBoxes + i]);
+        boxes.push(boxData);
+    }
+    let bestBox = null, maxConfidence = -1;
+    for (const box of boxes) {
+        const confidence = box[4];
+        if (confidence > maxConfidence) {
+            maxConfidence = confidence;
+            bestBox = box;
+        }
+    }
+    if (!bestBox || maxConfidence < 0.25) return [];
+    const keypoints = [];
+    const keypointData = bestBox.slice(5);
+    for (let i = 0; i < 17; i++) {
+        const x = keypointData[i * 3] * (originalWidth / MODEL_INPUT_WIDTH);
+        const y = keypointData[i * 3 + 1] * (originalHeight / MODEL_INPUT_HEIGHT);
+        const confidence = keypointData[i * 3 + 2];
+        keypoints.push({ x, y, confidence });
+    }
+    return keypoints;
+}
+
+function drawKeypoints(ctx, keypoints) {
+    ctx.fillStyle = '#00FF00';
+    ctx.lineWidth = 3;
+    keypoints.forEach(kp => {
+        if (kp.confidence > 0.5) {
+            ctx.beginPath();
+            ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+    });
+}
+
+async function getPoseEstimationFrame(imageBuffer) {
+    if (!poseSession) {
+        throw new Error("Pose estimation model is not loaded.");
+    }
+    const image = await loadImage(imageBuffer);
+    const { width: originalWidth, height: originalHeight } = image;
+    const inputTensor = await preProcessPoseImage(image);
+    const feeds = { 'images': inputTensor };
+    const results = await poseSession.run(feeds);
+    const keypoints = processPoseOutput(results.output0, originalWidth, originalHeight);
+    const canvas = createCanvas(originalWidth, originalHeight);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, originalWidth, originalHeight);
+    if (keypoints.length > 0) {
+        drawKeypoints(ctx, keypoints);
+    }
+    return canvas.toBuffer('image/jpeg');
+}
+
+// =================================================================
+// ## 4. API Endpoints
+// =================================================================
+
+// --- FIX: Refactored /generate endpoint with robust resource cleanup and full response logging ---
+app.post(
+    '/generate',
+    upload.fields([{ name: 'image', maxCount: 1 }, { name: 'audio', maxCount: 1 }]),
+    async (req, res) => {
+        // --- FIX: Define all potential resource variables here to ensure they are accessible in 'finally'
+        let image = null;
+        let audio = null;
+        let inputs = null;
+        let tempImagePath = null;
+        let fullResponse = ''; // Variable to capture the complete response
+        let imageUrl = null; // Store the accessible image URL
+
+        try {
+            const { text, imageUrl: providedImageUrl } = req.body;
+            const imageFile = req.files?.image?.[0];
+            const audioFile = req.files?.audio?.[0];
+
+            if (!text && !providedImageUrl && !imageFile && !audioFile) {
+                return res.status(400).json({ error: "Please provide text, an image, or an audio file." });
+            }
+
+            // --- Handle Image Loading ---
+            if (imageFile) {
+                console.log(`Processing uploaded image: ${imageFile.originalname}`);
+                const uploadDir = path.join(__dirname, 'uploads');
+                if (!fs.existsSync(uploadDir)) {
+                    fs.mkdirSync(uploadDir, { recursive: true });
+                }
+                const filename = `${Date.now()}-${imageFile.originalname}`;
+                tempImagePath = path.join(uploadDir, filename);
+                fs.writeFileSync(tempImagePath, imageFile.buffer);
+                image = await load_image(tempImagePath);
+                // Create accessible URL for the uploaded image
+                imageUrl = `http://localhost:${port}/uploads/${filename}`;
+            } else if (providedImageUrl) {
+                console.log(`Loading image from URL: ${providedImageUrl}`);
+                image = await load_image(providedImageUrl);
+                imageUrl = providedImageUrl; // Use the provided URL
+            }
+
+            // --- Handle Audio Loading ---
+            if (audioFile) {
+                console.log(`Processing uploaded audio: ${audioFile.originalname}`);
+                audio = await processAudio(audioFile.buffer);
+            }
+
+            // --- Prepare Content for the Model ---
+            const content = [];
+            if (image) content.push({ type: "image" });
+            if (audio) content.push({ type: "audio" });
+            if (text) content.push({ type: "text", text });
+
+            const messages = [{ role: "user", content }];
+            const prompt = processor.apply_chat_template(messages, { add_generation_prompt: true });
+
+            // This creates the tensors that MUST be disposed of later
+            inputs = await processor(prompt, image, audio, { add_special_tokens: false });
+            
+            // --- Generate Response (Non-streaming for JSON response) ---
+            console.log("📝 Prompt:");
+            console.log(text);
+            
+            const streamer = new TextStreamer(processor.tokenizer, {
+                skip_prompt: true,
+                skip_special_tokens: true,
+                callback_function: (chunk) => {
+                    // Capture each chunk to build the full response
+                    fullResponse += chunk;
+                },
+            });
+            
+            await model.generate({
+                ...inputs,
+                max_new_tokens: 4096,
+                do_sample: false,
+                streamer: streamer,
+            });
+
+            // Return JSON response with both text and image URL
+            res.json({
+                response: fullResponse.trim(),
+                imageUrl: imageUrl
+            });
+
+        } catch (error) {
+            console.error("❌ Error during generation:", error);
+            if (!res.headersSent) {
+                res.status(500).json({ 
+                    error: "An internal server error occurred during generation.",
+                    imageUrl: imageUrl || null 
+                });
+            }
+        } finally {
+            console.log("🧹 Cleaning up resources...");
+            
+            // --- Log the full Gemma response ---
+            if (fullResponse.trim()) {
+                console.log("\n" + "=".repeat(80));
+                console.log("📝 FULL GEMMA RESPONSE:");
+                console.log("=".repeat(80));
+                console.log(fullResponse);
+                console.log("=".repeat(80) + "\n");
+            }
+            
+            // --- FIX: Explicitly dispose of all tensors to prevent memory leaks ---
+            if (inputs) {
+                console.log("🗑️ Disposing of model input tensors...");
+                // The `inputs` object contains multiple tensors (e.g., input_ids, pixel_values).
+                // We must dispose of each one to free up the underlying memory.
+                for (const key in inputs) {
+                    if (inputs[key] && typeof inputs[key].dispose === 'function') {
+                        inputs[key].dispose();
+                    }
+                }
+                console.log("✅ Tensors disposed.");
+            }
+            
+            // Release memory-intensive variables for garbage collection
+            image = null;
+            audio = null;
+            inputs = null;
+            fullResponse = ''; // Clear the response variable
+
+            // Keep the uploaded image file for future reference (don't delete)
+            if (tempImagePath) {
+                console.log(`� Keeping uploaded file: ${tempImagePath}`);
+            }
+
+            // Ensure the response stream is properly closed
+            if (res.writable && !res.writableEnded) {
+                res.end();
+            }
+            console.log("✅ Cleanup complete. Server is ready for the next request.");
+        }
+    }
+);
+
+// --- Health check endpoint ---
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        message: 'AI Core is online.',
+        models: {
+            gemma_vision: { loaded: !!model, path: LOCAL_MODEL_PATH },
+            pose_estimation: { loaded: !!poseSession, path: POSE_MODEL_PATH }
+        }
+    });
+});
+
+// --- Pose estimation endpoint ---
+app.post('/pose-estimation', upload.single('image'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: "No image file uploaded." });
+    }
+    try {
+        const finalImageBuffer = await getPoseEstimationFrame(req.file.buffer);
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.send(finalImageBuffer);
+    } catch (error) {
+        console.error("Error during HTTP pose estimation:", error);
+        res.status(500).json({ error: "An internal server error occurred during pose estimation." });
+    }
+});
+
+// --- Model info endpoint ---
+app.get('/model-info', (req, res) => {
+    res.json({ gemma: { path: LOCAL_MODEL_PATH, loaded: !!model } });
+});
+
+
+// =================================================================
+// ## 5. Server and WebSocket Initialization
+// =================================================================
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+    console.log('✅ Client connected for real-time pose estimation');
+
+    ws.on('message', async (message) => {
+        try {
+            // The resources here are scoped to the message event and are garbage collected automatically.
+            const processedImageBuffer = await getPoseEstimationFrame(message);
+            if (ws.readyState === ws.OPEN) {
+                ws.send(processedImageBuffer);
+            }
+        } catch (e) {
+            console.error('❌ Error processing frame via WebSocket:', e.message);
+        }
+    });
+
+    ws.on('close', () => {
+        console.log('🔌 Client disconnected');
+    });
+
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
+});
+
+server.listen(port, async () => {
+    console.log(`\n🚀 Server starting at http://localhost:${port}`);
+    await loadPoseModel();
+    console.log("\n✅ All models loaded. Server is ready to accept requests.");
+    console.log(`- HTTP Endpoints are active.`);
+    console.log(`- WebSocket Endpoint is active at ws://localhost:${port}`);
+});

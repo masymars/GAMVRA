@@ -1,0 +1,62 @@
+@import './base.css';
+
+@import "tailwindcss";
+
+
+
+@theme {
+  /* Primary Teal Green */
+  --color-primary-100: #d1fae5;
+  --color-primary-200: #a7f3d0;
+  --color-primary-300: #6ee7b7;
+  --color-primary-400: #34d399;
+  --color-primary-500: #10b981; /* Main teal green */
+  --color-primary-600: #059669;
+  --color-primary-700: #047857;
+  --color-primary-800: #065f46;
+  --color-primary-900: #064e3b;
+
+  /* Secondary Mint Blue-Green */
+  --color-secondary-100: #cffafe;
+  --color-secondary-200: #a5f3fc;
+  --color-secondary-300: #67e8f9;
+  --color-secondary-400: #22d3ee;
+  --color-secondary-500: #06b6d4;
+  --color-secondary-600: #0891b2;
+  --color-secondary-700: #0e7490;
+  --color-secondary-800: #155e75;
+  --color-secondary-900: #164e63;
+
+  /* Accent Coral/Amber */
+  --color-accent-100: #fff7ed;
+  --color-accent-200: #ffedd5;
+  --color-accent-300: #fed7aa;
+  --color-accent-400: #fdba74;
+  --color-accent-500: #fb923c;
+  --color-accent-600: #f97316;
+  --color-accent-700: #ea580c;
+  --color-accent-800: #c2410c;
+  --color-accent-900: #9a3412;
+
+  /* Background Gray (unchanged) */
+  --color-background-100: #f9fafb;
+  --color-background-200: #f3f4f6;
+  --color-background-300: #e5e7eb;
+  --color-background-400: #d1d5db;
+  --color-background-500: #9ca3af;
+  --color-background-600: #6b7280;
+  --color-background-700: #4b5563;
+  --color-background-800: #374151;
+  --color-background-900: #1f2937;
+
+  /* Foreground Slate (unchanged) */
+  --color-foreground-100: #f8fafc;
+  --color-foreground-200: #f1f5f9;
+  --color-foreground-300: #e2e8f0;
+  --color-foreground-400: #cbd5e1;
+  --color-foreground-500: #94a3b8;
+  --color-foreground-600: #64748b;
+  --color-foreground-700: #475569;
+  --color-foreground-800: #334155;
+  --color-foreground-900: #111827;
+}

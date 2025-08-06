@@ -1,0 +1,194 @@
+{
+  "architectures": [
+    "Gemma3nForConditionalGeneration"
+  ],
+  "audio_config": {
+    "conf_attention_chunk_size": 12,
+    "conf_attention_context_left": 13,
+    "conf_attention_context_right": 0,
+    "conf_attention_invalid_logits_value": -1000000000.0,
+    "conf_attention_logit_cap": 50.0,
+    "conf_conv_kernel_size": 5,
+    "conf_num_attention_heads": 8,
+    "conf_num_hidden_layers": 12,
+    "conf_positional_bias_size": 256,
+    "conf_reduction_factor": 4,
+    "conf_residual_weight": 0.5,
+    "gradient_clipping": 10000000000.0,
+    "hidden_size": 1536,
+    "input_feat_size": 128,
+    "model_type": "gemma3n_audio",
+    "rms_norm_eps": 1e-06,
+    "sscp_conv_channel_size": [
+      128,
+      32
+    ],
+    "sscp_conv_eps": 0.001,
+    "sscp_conv_kernel_size": [
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ]
+    ],
+    "sscp_conv_stride_size": [
+      [
+        2,
+        2
+      ],
+      [
+        2,
+        2
+      ]
+    ],
+    "torch_dtype": "float32",
+    "vocab_size": 128
+  },
+  "audio_soft_tokens_per_image": 188,
+  "audio_token_id": 262273,
+  "boa_token_id": 256000,
+  "boi_token_id": 255999,
+  "eoa_token_id": 262272,
+  "eoi_token_id": 262144,
+  "eos_token_id": [
+    1,
+    106
+  ],
+  "image_token_id": 262145,
+  "initializer_range": 0.02,
+  "model_type": "gemma3n",
+  "text_config": {
+    "activation_sparsity_pattern": [
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "altup_active_idx": 0,
+    "altup_coef_clip": 120.0,
+    "altup_correct_scale": true,
+    "altup_lr_multiplier": 1.0,
+    "altup_num_inputs": 4,
+    "attention_bias": false,
+    "attention_dropout": 0.0,
+    "attn_logit_softcapping": null,
+    "final_logit_softcapping": 30.0,
+    "head_dim": 256,
+    "hidden_activation": "gelu_pytorch_tanh",
+    "hidden_size": 2048,
+    "hidden_size_per_layer_input": 256,
+    "initializer_range": 0.02,
+    "intermediate_size": 8192,
+    "laurel_rank": 64,
+    "layer_types": [
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "full_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "full_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "full_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "full_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "full_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "full_attention"
+    ],
+    "max_position_embeddings": 32768,
+    "model_type": "gemma3n_text",
+    "num_attention_heads": 8,
+    "num_hidden_layers": 30,
+    "num_key_value_heads": 2,
+    "num_kv_shared_layers": 10,
+    "query_pre_attn_scalar": 256,
+    "rms_norm_eps": 1e-06,
+    "rope_local_base_freq": 10000.0,
+    "rope_scaling": null,
+    "rope_theta": 1000000.0,
+    "sliding_window": 512,
+    "torch_dtype": "float32",
+    "use_cache": true,
+    "vocab_size": 262144
+  },
+  "torch_dtype": "float32",
+  "transformers_version": "4.53.0.dev0",
+  "transformers.js_config": {
+    "use_external_data_format": {
+      "audio_encoder.onnx": 1,
+      "embed_tokens.onnx": 1,
+      "embed_tokens_fp16.onnx": 1,
+      "embed_tokens_int8.onnx": 1,
+      "embed_tokens_uint8.onnx": 1,
+      "embed_tokens_quantized.onnx": 2,
+      "decoder_model_merged.onnx": 1,
+      "decoder_model_merged_fp16.onnx": 1,
+      "vision_encoder.onnx": 1
+    },
+    "dtype": {
+      "embed_tokens": "q8",
+      "decoder_model_merged": "q4"
+    }
+  },
+  "vision_config": {
+    "architecture": "mobilenetv5_enc",
+    "do_pooling": true,
+    "hidden_size": 2048,
+    "initializer_range": 0.02,
+    "label_names": [
+      "LABEL_0",
+      "LABEL_1"
+    ],
+    "model_type": "gemma3n_vision",
+    "num_classes": 2,
+    "torch_dtype": "float32",
+    "vocab_size": 128
+  },
+  "vision_soft_tokens_per_image": 256
+}

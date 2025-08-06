@@ -1,0 +1,7 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+resources/models/gemma-3n-E2B-it-ONNX/onnx
