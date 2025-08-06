@@ -5,3 +5,4 @@ out
 .eslintcache
 *.log*
 resources/models/gemma-3n-E2B-it-ONNX/onnx
+.vscode
